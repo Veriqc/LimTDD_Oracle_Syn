@@ -294,4 +294,4 @@ def get_ramdom_TDD(n):
     # print(var_order)
     ts = Tensor(data,var)
     Ini_TDD(var_order)
-    return ts.tdd()
+    return ts.tdd(),tensor_to_vector(data)
