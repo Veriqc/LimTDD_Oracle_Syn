@@ -16,6 +16,7 @@ class Gate:
         self.q_c = q_c
         self.q_t = q_t
         # self.nodes = {}
+        self.is_edge_op = False
         X = np.array([[0,1],[1,0]])
         if 'x' in name:
             self.para = X
@@ -92,10 +93,12 @@ class Circuit:
             cir=cir&g.to_qis_cir(self.num_qubits)
         return cir
         
-def get_controlled_circuit2(cir,cond = {0:1},add_qubits_num = 0):
+def get_controlled_circuit2(cir,cond = {0:1},add_qubits_num = 0,pass_edge_op=False):
     cir.num_qubits += add_qubits_num
     new_data = []
     for g in cir.data:
+        if pass_edge_op and g.is_edge_op:
+            continue
         for c in cond:
             g.q_c[c]=cond[c]
     return cir
