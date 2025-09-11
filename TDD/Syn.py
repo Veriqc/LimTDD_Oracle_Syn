@@ -288,7 +288,27 @@ def vector_to_tensor(vec: np.ndarray, n: int) -> np.ndarray:
 
 def get_ramdom_TDD(n):
     data = random_binary_tensor(n)
-    # print(data)
+    # print(data.shape)
+    var = []
+    var_order = []
+    for k in range(n-1,-1,-1):
+        var.append(Index('x'+str(k)))
+        var_order.append('x'+str(k))
+    # print(var_order)
+    ts = Tensor(data,var)
+    Ini_TDD(var_order)
+    return ts.tdd(),tensor_to_vector(data)
+
+def get_truth_table(n, tt):
+    array = []
+    pivot = 1
+    for i in range(2 ** n):
+        array.append((1 if tt & pivot else 0))
+        pivot <<= 1
+    return np.array(array).reshape((2,) * 6)
+
+def get_TDD_from_truth_table(n, tt):
+    data = get_truth_table(n, tt)
     var = []
     var_order = []
     for k in range(n-1,-1,-1):
