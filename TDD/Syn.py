@@ -286,8 +286,9 @@ def vector_to_tensor(vec: np.ndarray, n: int) -> np.ndarray:
         raise ValueError(f"向量长度 {vec.size} 不等于 2^{n} = {(1 << n)}")
     return vec.reshape((2,) * n)
 
-def get_ramdom_TDD(n):
-    data = random_binary_tensor(n)
+def get_ramdom_TDD(n,data=np.array([])):
+    if sum(data.shape)==0:
+        data = random_binary_tensor(n)
     # print(data)
     var = []
     var_order = []
@@ -298,3 +299,195 @@ def get_ramdom_TDD(n):
     ts = Tensor(data,var)
     Ini_TDD(var_order)
     return ts.tdd(),tensor_to_vector(data)
+
+def get_truth_table(n, tt):
+    array = []
+    pivot = 1
+    for i in range(2 ** n):
+        array.append((1 if tt & pivot else 0))
+        pivot <<= 1
+    return np.array(array).reshape((2,) * n)
+
+def get_TDD_from_truth_table(n, tt):
+    data = get_truth_table(n, tt)
+    var = []
+    var_order = []
+    for k in range(n-1,-1,-1):
+        var.append(Index('x'+str(k)))
+        var_order.append('x'+str(k))
+    # print(var_order)
+    ts = Tensor(data,var)
+    Ini_TDD(var_order)
+    return ts.tdd(),tensor_to_vector(data)
+
+def swap_two_gate(n,g0,g1):
+    "g0在左，g1在右"
+    cir_temp = Circuit(n,[])
+
+    # 两门互逆相消
+    if g0.q_c==g1.q_c and g0.q_t==g1.q_t:
+        return cir_temp,True
+
+        
+    #某处控制条件不同:
+    com_q_c = [k for k in g0.q_c if k in g1.q_c]
+    c = [abs(g0.q_c[k]-g1.q_c[k]) for k in com_q_c]
+
+####-----------处理特殊情况
+
+
+    # if sum(c)==2 and set(g0.q_c.keys())==set(g1.q_c.keys()) and g0.q_t==g1.q_t: #都是x,某两处控制条件不同
+    #     p0 = c.index(1)
+    #     p1 = p0+1+c[p0+1:].index(1)
+    #     cond0={com_q_c[p0]:1}
+    #     cond1={com_q_c[p1]:1}
+    #     for k in g0.q_c:
+    #         if k!=p0 and k!=p1:
+    #             cond0[k] = g0.q_c[k]
+    #             cond1[k] = g0.q_c[k]
+    #     g00 = Gate('x',cond0,g0.q_t,g0.para)
+    #     g11 = Gate('x',cond1,g1.q_t,g1.para)
+    #     cir_temp.data.append(g00)
+    #     cir_temp.data.append(g11)
+    #     if g0.q_c[com_q_c[p0]]==g0.q_c[com_q_c[p1]]:
+    #         g = Gate('x',{},g1.q_t,g1.para)
+    #         cir_temp.data.append(g)
+    #     return cir_temp,True
+
+                
+
+
+####-----------处理一般情况
+    
+    #仅控制比特相交或完全不相交
+    if g0.q_t!=g1.q_t and not g0.q_t in g1.q_c and not g1.q_t in g0.q_c:
+        cir_temp.data = [g1,g0]
+        return cir_temp,True
+
+
+    # print('---------------')
+    # print(g0,g1)
+    if sum(c)==1 and g0.q_t==g1.q_t:
+        res0 = [k for k in g0.q_c if not k in com_q_c]
+        res1 = [k for k in g1.q_c if not k in com_q_c]
+        if len(res0)==0 and len(res1)==1:
+            com_cond = {}
+            new_cond = {}
+            for k in g1.q_c:
+                if k in g0.q_c and g0.q_c[k]==g1.q_c[k]:
+                    com_cond[k]=g1.q_c[k]
+                    new_cond[k]=g1.q_c[k]
+                if not k in g0.q_c:
+                    new_cond[k]=1-g1.q_c[k]
+                else:
+                    new_cond[k]=g1.q_c[k]
+            g00 = Gate(g0.name,com_cond,g0.q_t)
+            g11 = Gate(g0.name,new_cond,g0.q_t)
+            cir_temp.data.append(g00)
+            cir_temp.data.append(g11)
+            return cir_temp,True
+        if len(res0)==1 and len(res1)==0:
+            com_cond = {}
+            new_cond = {}
+            for k in g0.q_c:
+                if k in g1.q_c and g0.q_c[k]==g1.q_c[k]:
+                    com_cond[k]=g0.q_c[k]
+                    new_cond[k]=g0.q_c[k]
+                if not k in g1.q_c:
+                    new_cond[k]=1-g0.q_c[k]
+                else:
+                    new_cond[k]=g0.q_c[k]
+            g00 = Gate(g0.name,new_cond,g0.q_t)
+            g11 = Gate(g0.name,com_cond,g0.q_t)
+            cir_temp.data.append(g00)
+            cir_temp.data.append(g11)
+            return cir_temp,True
+    
+    # print('------==-------')
+    if sum(c)==1 and set(g0.q_c.keys())==set(g1.q_c.keys()) and g0.q_t==g1.q_t:#比特相同，某一处控制条件不同
+        q = [k for k in g0.q_c]
+        q.remove(com_q_c[c.index(1)])
+        cond = {k:g0.q_c[k] for k in q}
+        g = Gate(g0.name,cond,g0.q_t,g0.para)
+        cir_temp.data.append(g)
+        return cir_temp,True
+
+    
+    if sum(c)>0:#某处控制条件不同         
+        cir_temp.data = [g1,g0]
+        return cir_temp,True
+        
+    if g0.q_t==g1.q_t:
+        if len(g0.q_c)==len(g1.q_c)+1: #控制条件相同但差一个比特
+            q = [k for k in g0.q_c]
+            cond={}
+            for k in q:
+                if k in g1.q_c:
+                    cond[k] = g0.q_c[k]
+                else:
+                    cond[k] = 1-g0.q_c[k]
+            g = Gate(g0.name,cond,g0.q_t,g0.para)
+            cir_temp.data.append(g)
+            return cir_temp,True
+        if len(g1.q_c)==len(g0.q_c)+1: #控制条件相同但差一个比特
+            q = [k for k in g1.q_c]
+            cond={}
+            for k in q:
+                if k in g0.q_c:
+                    cond[k] = g1.q_c[k]
+                else:
+                    cond[k] = 1-g1.q_c[k]
+            g = Gate(g1.name,cond,g1.q_t,g1.para)
+            cir_temp.data.append(g)
+            return cir_temp,True
+            
+
+        
+    if g0.q_t == g1.q_t:
+        cir_temp.data = [g1,g0]
+        return cir_temp,True
+
+
+    if g0.name=='x' and g0.q_t in g1.q_c and set(g0.q_c.keys()).issubset(g1.q_c.keys()):
+        cond = copy.copy(g1.q_c)
+        cond[g0.q_t] = 1-cond[g0.q_t]
+        g = Gate(g1.name,cond,g1.q_t,g1.para)
+        cir_temp.data = [g,g0]
+        return cir_temp,True
+    if g1.name=='x' and g1.q_t in g0.q_c and set(g1.q_c.keys()).issubset(g0.q_c.keys()):
+        cond = copy.copy(g0.q_c)
+        cond[g1.q_t] = 1-cond[g1.q_t]
+        g = Gate(g0.name,cond,g0.q_t,g0.para)
+        cir_temp.data = [g1,g]
+        return cir_temp,True  
+    
+    cir_temp.data = [g0,g1]
+    return cir_temp,False
+
+def swap_a_gate_to_head(cir_l,g):
+    n=cir_l.num_qubits
+    cir_new = Circuit(n,[])
+    if len(cir_l.data)==0:
+        cir_new.data.append(g)
+        return cir_new,True
+    for k in range(len(cir_l.data)-1,-1,-1):
+        cir_t,res = swap_two_gate(n,cir_l.data[k],g)
+        if not res:
+            cir_new.data=cir_l.data[:k]+cir_t.data+cir_new.data
+            return cir_new,res
+        if k!=0:
+            if len(cir_t.data)==0:
+                cir_new.data = cir_l.data[:k]+cir_new.data
+                break
+            g = cir_t.data.pop(0)
+        cir_new.data = cir_t.data+cir_new.data       
+    return cir_new,True
+
+
+def mcx_opt_pass(cir):
+    n2 = cir.num_qubits
+    cir_l = Circuit(n2,[])
+    for g in cir.data:
+        cir_t,res = swap_a_gate_to_head(cir_l,g)
+        cir_l = cir_t
+    return cir_l
