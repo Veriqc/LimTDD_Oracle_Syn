@@ -286,7 +286,7 @@ def vector_to_tensor(vec: np.ndarray, n: int) -> np.ndarray:
         raise ValueError(f"向量长度 {vec.size} 不等于 2^{n} = {(1 << n)}")
     return vec.reshape((2,) * n)
 
-def get_ramdom_TDD(n,data=np.array([])):
+def get_ramdom_TDD(n,data=np.array([]),var_order_s = []):
     if sum(data.shape)==0:
         data = random_binary_tensor(n)
     # print(data)
@@ -297,7 +297,10 @@ def get_ramdom_TDD(n,data=np.array([])):
         var_order.append('x'+str(k))
     # print(var_order)
     ts = Tensor(data,var)
-    Ini_TDD(var_order)
+    if not var_order_s:
+        var_order_s=var_order
+    # print(var_order)
+    Ini_TDD(var_order_s)
     return ts.tdd(),tensor_to_vector(data)
 
 def get_truth_table(n, tt):
@@ -308,7 +311,7 @@ def get_truth_table(n, tt):
         pivot <<= 1
     return np.array(array).reshape((2,) * n)
 
-def get_TDD_from_truth_table(n, tt):
+def get_TDD_from_truth_table(n, tt,var_order_s = []):
     data = get_truth_table(n, tt)
     var = []
     var_order = []
@@ -317,7 +320,9 @@ def get_TDD_from_truth_table(n, tt):
         var_order.append('x'+str(k))
     # print(var_order)
     ts = Tensor(data,var)
-    Ini_TDD(var_order)
+    if not var_order_s:
+        var_order_s=var_order    
+    Ini_TDD(var_order_s)
     return ts.tdd(),tensor_to_vector(data)
 
 def swap_two_gate(n,g0,g1):
