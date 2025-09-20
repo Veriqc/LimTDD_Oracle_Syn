@@ -269,12 +269,19 @@ def random_binary_tensor(n: int) -> np.ndarray:
     return np.random.randint(0, 2, size=shape, dtype=np.uint8)
 
 
-def tensor_to_vector(tensor: np.ndarray) -> np.ndarray:
+def tensor_to_vector(tensor: np.ndarray, var_order_s = []) -> np.ndarray:
     """
     把任意形状的 0/1 数组展平成一维向量（按 C-order 行优先）。
     """
     # 也可以用 np.ravel 或 flatten，结果一样
-    return tensor.reshape(-1)
+    if not var_order_s:
+        return tensor.reshape(-1)
+    else:
+        order = []
+        for idx in var_order_s:
+            order.append(int(idx[1:]))
+        order.reverse()
+        return tensor.transpose(order).ravel() 
 
 def vector_to_tensor(vec: np.ndarray, n: int) -> np.ndarray:
     """
@@ -301,7 +308,7 @@ def get_ramdom_TDD(n,data=np.array([]),var_order_s = []):
         var_order_s=var_order
     # print(var_order)
     Ini_TDD(var_order_s)
-    return ts.tdd(),tensor_to_vector(data)
+    return ts.tdd(),tensor_to_vector(data,var_order_s)
 
 def get_truth_table(n, tt):
     array = []
@@ -323,7 +330,7 @@ def get_TDD_from_truth_table(n, tt,var_order_s = []):
     if not var_order_s:
         var_order_s=var_order    
     Ini_TDD(var_order_s)
-    return ts.tdd(),tensor_to_vector(data)
+    return ts.tdd(),tensor_to_vector(data,var_order_s)
 
 def swap_two_gate(n,g0,g1):
     "g0在左，g1在右"
