@@ -502,6 +502,8 @@ def normalize(x,the_successors):
     flip=0
     if abs(the_successors[0].weight) < abs(the_successors[1].weight)-epi/2:
         flip=1
+    elif abs(abs(the_successors[0].weight)-abs(the_successors[1].weight))<epi/2 and id(the_successors[0].node)>id(the_successors[1].node):
+        flip=1
 #     elif abs(the_successors[0].weight) == abs(the_successors[1].weight) and np.angle(the_successors[1].weight)<np.angle(the_successors[0].weight):
 #         flip=1
 #     elif abs(the_successors[1].weight-the_successors[0].weight)<epi/2:
