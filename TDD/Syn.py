@@ -503,3 +503,12 @@ def mcx_opt_pass(cir):
         cir_t,res = swap_a_gate_to_head(cir_l,g)
         cir_l = cir_t
     return cir_l
+
+t_cost_list =[0,0,7,16,24,62,80,200,216,272,392,448,504,560,616,672,728]
+def t_cost(circ):
+    cost=0
+    for gate in circ.data:
+        ctrl_num=len(gate.qubits())-1
+        assert(ctrl_num<= 16)
+        cost += t_cost_list[ctrl_num]
+    return cost

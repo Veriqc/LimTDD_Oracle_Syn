@@ -188,7 +188,8 @@ class Node:
         self.isidentity = False 
         self.ref = 0
         self.hold_prob = 1
-
+        self.has_op = False
+        
 class TDD:
     def __init__(self,node):
         """TDD"""
@@ -372,6 +373,7 @@ def Ini_TDD(index_order=[]):
     the_maps_table = dict()
     map_computed_table =dict()
     the_maps_header=the_maps()
+    renormalize_nodes = dict()
     return get_identity_tdd()
 
 def Clear_TDD():
@@ -471,10 +473,11 @@ def Find_Or_Add_Unique_table(x,weigs=[],succ_nodes=[],the_map2=[]):
         res.out_maps = [the_maps_header,the_map2]
         unique_table[temp_key]=res
         
-        if x%2==1 and weigs==[1,1] and the_map2.level==x-1 and the_map2.x==1 and the_map2.rotate==0 and the_map2.father.level==-1 and succ_nodes[0]==succ_nodes[1]:
-            if succ_nodes[0].out_weight==[1,0] and (succ_nodes[0].successor[0].isidentity or succ_nodes[0].successor[0].key==-1):
-                res.isidentity=True
-        
+        # if x%2==1 and weigs==[1,1] and the_map2.level==x-1 and the_map2.x==1 and the_map2.rotate==0 and the_map2.father.level==-1 and succ_nodes[0]==succ_nodes[1]:
+        #     if succ_nodes[0].out_weight==[1,0] and (succ_nodes[0].successor[0].isidentity or succ_nodes[0].successor[0].key==-1):
+        #         res.isidentity=True
+        if the_map2.level!=-1 or succ_nodes[0].has_op or succ_nodes[1].has_op:
+            res.has_op = True
     return res
 
 
@@ -560,6 +563,25 @@ def normalize(x,the_successors):
 #     print('c',x,weigs,the_map2,weig_max,the_map)
 #     print(523,the_successors[0].map,the_successors[1].map,the_map2,the_map,the_successors[0].weight,the_successors[0].weight)
 #     print('-------------------')
+    return res
+
+renormalize_nodes = {}
+def renormalize_wio_op(v):
+    if not v.has_op:
+        return TDD(v)
+    if v in renormalize_nodes:
+        res = renormalize_nodes[v]
+        tdd = TDD(res[1])
+        tdd.weight = res[0]
+        tdd.map=res[2]
+        return tdd
+
+    s0 = renormalize_wio_op(v.successor[0])
+    s0.weight*=v.out_weight[0]
+    s1 = renormalize_wio_op(v.successor[1])
+    s1.weight*=v.out_weight[1]
+    res = normalize(v.key,[s0,s1])
+    renormalize_nodes[v] = (res.weight,res.node,res.map)
     return res
 
 def get_count():
