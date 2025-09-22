@@ -194,7 +194,7 @@ def get_downward_k_level_map(tdd,k,c):
     temp_tdd = Slicing2(Slicing2(tdd,tdd.node.key,0),tdd.node.key-1,0)
     return get_downward_k_level_map(temp_tdd,k-1,c)
 
-def get_branch_dd(u,c):
+def get_branch_dd(u,c,add_neg=True):
     bran_tdd = TDD(u.successor[c])
     n2 = bran_tdd.node.key+1
     bran_tdd.index_set = []
@@ -204,7 +204,9 @@ def get_branch_dd(u,c):
         bran_tdd.index_set.append(Index('y'+str(k),0))
         bran_tdd.key_2_index[k] = 'y'+str(k)
         bran_tdd.key_width[k] = 2
-    bran_tdd.index_2_key = {bran_tdd.key_2_index[a]:a for a in bran_tdd.key_2_index} 
+    bran_tdd.index_2_key = {bran_tdd.key_2_index[a]:a for a in bran_tdd.key_2_index}
+    if add_neg:
+        bran_tdd.neg = u.out_negs[c]
     return bran_tdd
 
 
@@ -277,11 +279,13 @@ def tensor_to_vector(tensor: np.ndarray, var_order_s = []) -> np.ndarray:
     if not var_order_s:
         return tensor.reshape(-1)
     else:
-        order = []
-        for idx in var_order_s:
-            order.append(int(idx[1:]))
-        order.reverse()
-        return tensor.transpose(order).ravel() 
+        m = len(var_order_s)
+        var_order = []
+        for k in range(m-1,-1,-1):
+            var_order.append('x'+str(k))
+        old_to_idx = {lab: idx for idx, lab in enumerate(var_order)}
+        order_n = [old_to_idx[lab] for lab in var_order_s]
+        return tensor.transpose(order_n).ravel() 
 
 def vector_to_tensor(vec: np.ndarray, n: int) -> np.ndarray:
     """
@@ -293,7 +297,7 @@ def vector_to_tensor(vec: np.ndarray, n: int) -> np.ndarray:
         raise ValueError(f"向量长度 {vec.size} 不等于 2^{n} = {(1 << n)}")
     return vec.reshape((2,) * n)
 
-def get_ramdom_TDD(n,data=np.array([]),var_order_s = []):
+def get_ramdom_TDD(n,data=np.array([]),var_order_s = [],add_neg=False):
     if sum(data.shape)==0:
         data = random_binary_tensor(n)
     # print(data)
@@ -308,7 +312,7 @@ def get_ramdom_TDD(n,data=np.array([]),var_order_s = []):
         var_order_s=var_order
     # print(var_order)
     Ini_TDD(var_order_s)
-    return ts.tdd(),tensor_to_vector(data,var_order_s)
+    return ts.tdd(add_neg),tensor_to_vector(data,var_order_s)
 
 def get_truth_table(n, tt):
     array = []
@@ -318,19 +322,19 @@ def get_truth_table(n, tt):
         pivot <<= 1
     return np.array(array).reshape((2,) * n)
 
-def get_TDD_from_truth_table(n, tt,var_order_s = []):
+def get_TDD_from_truth_table(n, tt,var_order_s = [],add_neg=False):
     data = get_truth_table(n, tt)
+    # print(data)
     var = []
     var_order = []
     for k in range(n-1,-1,-1):
         var.append(Index('x'+str(k)))
         var_order.append('x'+str(k))
-    # print(var_order)
     ts = Tensor(data,var)
     if not var_order_s:
         var_order_s=var_order    
     Ini_TDD(var_order_s)
-    return ts.tdd(),tensor_to_vector(data,var_order_s)
+    return ts.tdd(add_neg),tensor_to_vector(data,var_order_s)
 
 def swap_two_gate(n,g0,g1):
     "g0在左，g1在右"

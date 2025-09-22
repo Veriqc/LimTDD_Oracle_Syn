@@ -189,16 +189,15 @@ class Node:
         self.ref = 0
         self.hold_prob = 1
         self.has_op = False
+        self.out_negs=[False]*num
         
 class TDD:
     def __init__(self,node):
         """TDD"""
         self.weight = 1
-        
         self.map = the_maps_header
-        
+        self.neg = False
         self.index_set=[]
-        
         self.key_2_index=dict()
         self.index_2_key=dict()
         self.key_width=dict() #Only used when change TDD to numpy
@@ -231,6 +230,8 @@ class TDD:
         dot.node('-0','',shape='none')
         label1=str(complex(round(self.weight.real,2),round(self.weight.imag,2)))
         label1+=str(self.map)
+        if self.neg:
+            label1+='o'
         dot.edge('-0',str(self.node.idx),color="blue",label=label1)
         dot.format = 'png'
         return Image(dot.render(file_name))
@@ -343,6 +344,8 @@ def layout(node,key_2_idx,dot=Digraph(),succ=[],real_label=True):
         if node.successor[k]:
             label1=str(complex(round(node.out_weight[k].real,2),round(node.out_weight[k].imag,2)))
             label1+=str(node.out_maps[k])
+            if node.out_negs[k]:
+                label1+='o'
             if not node.successor[k] in succ:
                 dot=layout(node.successor[k],key_2_idx,dot,succ,real_label)
                 dot.edge(str(node.idx),str(node.successor[k].idx),color=col[k%4],label=label1)
@@ -434,7 +437,7 @@ def get_node_set(node,node_set=set()):
                 node_set = get_node_set(node.successor[k],node_set)
     return node_set
 
-def Find_Or_Add_Unique_table(x,weigs=[],succ_nodes=[],the_map2=[]):
+def Find_Or_Add_Unique_table(x,weigs=[],succ_nodes=[],the_map2=[],negs=[False,False]):
     """To return a node if it already exist, creates a new node otherwise"""
     global global_node_idx,unique_table
     
@@ -454,7 +457,7 @@ def Find_Or_Add_Unique_table(x,weigs=[],succ_nodes=[],the_map2=[]):
         temp_key.append(succ_nodes[k])
     
     temp_key += [the_map2]
-    
+    temp_key+= negs
     temp_key=tuple(temp_key)
     
 #     print('------')
@@ -471,6 +474,7 @@ def Find_Or_Add_Unique_table(x,weigs=[],succ_nodes=[],the_map2=[]):
         res.out_weight=weigs
         res.successor=succ_nodes
         res.out_maps = [the_maps_header,the_map2]
+        res.out_negs = negs
         unique_table[temp_key]=res
         
         # if x%2==1 and weigs==[1,1] and the_map2.level==x-1 and the_map2.x==1 and the_map2.rotate==0 and the_map2.father.level==-1 and succ_nodes[0]==succ_nodes[1]:
@@ -484,29 +488,32 @@ def Find_Or_Add_Unique_table(x,weigs=[],succ_nodes=[],the_map2=[]):
 def normalize(x,the_successors):
     """The normalize and reduce procedure"""
 #     print('a',x,the_successors[0].weight,the_successors[0].map,the_successors[1].weight,the_successors[1].map)
-    all_zero = True
+    # all_zero = True
     
 #     for k in range(len(the_successors)):
 #         if get_int_key(the_successors[k].weight)==(0,0):
 #             the_successors[k].map=the_maps(dict())
-    
+    zeros = [False]*2
     for k in range(len(the_successors)):
-        if the_successors[k].node.key!=-1:
-            all_zero = False
-            break
-        if the_successors[k].weight!=0:
-            all_zero = False
-            break        
-            
-    if all_zero:
-        return the_successors[0]
+        # if the_successors[k].node.key!=-1:
+        #     all_zero = False
+        #     break
+        if abs(the_successors[k].weight)<epi and not the_successors[k].neg:
+            zeros[k] = True      
+
+    # if zeros[0] and zeros[1]:
+    #     return the_successors[0]
     
     the_map = the_maps_header
     flip=0
     if abs(the_successors[0].weight) < abs(the_successors[1].weight)-epi/2:
         flip=1
-    elif abs(abs(the_successors[0].weight)-abs(the_successors[1].weight))<epi/2 and id(the_successors[0].node)>id(the_successors[1].node):
-        flip=1
+    elif abs(abs(the_successors[0].weight)-abs(the_successors[1].weight))<epi/2:
+        if  (zeros[0] and not zeros[1]):
+            flip=1
+        elif id(the_successors[0].node)>id(the_successors[1].node):
+            flip=1
+            
 #     elif abs(the_successors[0].weight) == abs(the_successors[1].weight) and np.angle(the_successors[1].weight)<np.angle(the_successors[0].weight):
 #         flip=1
 #     elif abs(the_successors[1].weight-the_successors[0].weight)<epi/2:
@@ -515,12 +522,13 @@ def normalize(x,the_successors):
             
     if flip:
         the_successors = [the_successors[1],the_successors[0]]
-    
-    if get_int_key(the_successors[1].weight)==(0,0):
-        weigs=[1,0]  
-#         succ_nodes=[succ.node for succ in the_successors]
+        zeros = [zeros[1],zeros[0]]
+
+    if zeros[1]:
+        weigs=[the_successors[0].weight,0]  
         succ_nodes=[the_successors[0].node,the_successors[0].node]
-        node=Find_Or_Add_Unique_table(x,weigs,succ_nodes,the_maps_header)
+        succ_negs = [succ.neg for succ in the_successors]
+        node=Find_Or_Add_Unique_table(x,weigs,succ_nodes,the_maps_header,succ_negs)
         res=TDD(node)
         res.weight=the_successors[0].weight
         if flip==1:
@@ -530,22 +538,21 @@ def normalize(x,the_successors):
         return res
         
     the_map2,the_phase = the_successors[1].map/the_successors[0].map
-#     print('-------------------')
-#     print(494,the_successors[0].map,the_successors[1].map,the_map2,the_phase)
+
     weig_max = the_successors[0].weight
-    w2 = the_successors[1].weight/the_successors[0].weight
+    # w2 = the_successors[1].weight/the_successors[0].weight
+    w2 = the_successors[1].weight
+    # w2_rotate = int(np.angle(w2)//rotate_angle)
     
-    w2_rotate = int(np.angle(w2)//rotate_angle)
+    # if abs(np.angle(w2)%rotate_angle-rotate_angle)<epi*rotate_angle:
+    #     w2_rotate+=1
+    #     w2 = np.abs(w2)
+    # elif w2_rotate != 0:
+    #     w2 = np.abs(w2)*np.exp(1j*(np.angle(w2)%rotate_angle))
     
-    if abs(np.angle(w2)%rotate_angle-rotate_angle)<epi*rotate_angle:
-        w2_rotate+=1
-        w2 = np.abs(w2)
-    elif w2_rotate != 0:
-        w2 = np.abs(w2)*np.exp(1j*(np.angle(w2)%rotate_angle))
-    
-    the_phase = (the_phase + w2_rotate)%root_of_unit
-    
-#     print(509,the_successors[0].map,the_successors[1].map,the_map2,the_phase,flip)
+    # the_phase = (the_phase + w2_rotate)%root_of_unit
+    the_phase=0
+
     
     if flip or the_phase != 0:
         the_map = the_successors[0].map.append_new_map(x,flip,the_phase)
@@ -553,16 +560,13 @@ def normalize(x,the_successors):
         the_map = the_successors[0].map
 
         
-    weigs=[1,w2]  
+    weigs=[weig_max,w2]  
     succ_nodes=[succ.node for succ in the_successors]
-#     print('b',x,weigs,the_map2,id(the_map2),weig_max,the_map,id(the_map))
-    node=Find_Or_Add_Unique_table(x,weigs,succ_nodes,the_map2)
+    succ_negs = [succ.neg for succ in the_successors]
+    node=Find_Or_Add_Unique_table(x,weigs,succ_nodes,the_map2,succ_negs)
     res=TDD(node)
     res.weight=weig_max
     res.map = the_map
-#     print('c',x,weigs,the_map2,weig_max,the_map)
-#     print(523,the_successors[0].map,the_successors[1].map,the_map2,the_map,the_successors[0].weight,the_successors[0].weight)
-#     print('-------------------')
     return res
 
 renormalize_nodes = {}
@@ -666,7 +670,7 @@ def get_index_2_key(var):
             n+=1
     return idx_2_key,key_2_idx
     
-def get_tdd(U,var=[]):
+def get_tdd(U,var=[],add_neg=False):
     
 #     if len(var)==0 or not isinstance(var[0],Index):
 #         return np_2_tdd(U,var)
@@ -676,7 +680,7 @@ def get_tdd(U,var=[]):
     for idx in var:
         order.append(idx_2_key[idx.key])
         
-    tdd = np_2_tdd(U,order)
+    tdd = np_2_tdd(U,order,True,add_neg)
     tdd.index_2_key=idx_2_key
     tdd.key_2_index=key_2_idx
     tdd.index_set=var
@@ -732,7 +736,7 @@ def get_tdd2(U,var,idx_2_key=None):
     tdd.key_2_index=key_2_idx
     return tdd
 
-def np_2_tdd(U,order=[],key_width=True):
+def np_2_tdd(U,order=[],key_width=True,add_neg=False):
     #index is the index_set as the axis order of the matrix
     U_dim=U.ndim
     U_shape=U.shape
@@ -756,8 +760,13 @@ def np_2_tdd(U,order=[],key_width=True):
     x=max(order)
     split_pos=order.index(x)
     order[split_pos]=-1
-    split_U=np.split(U,U_shape[split_pos],split_pos)
+
+    neg=False
+    if add_neg and U.mean() > 0.5:
+        U=1-U
+        neg=True
     
+    split_U=np.split(U,U_shape[split_pos],split_pos)
     while x in order:
         split_pos=order.index(x)
         for k in range(len(split_U)):
@@ -766,13 +775,16 @@ def np_2_tdd(U,order=[],key_width=True):
     
     the_successors=[]
     for k in range(U_shape[split_pos]):
-        res=np_2_tdd(split_U[k],copy.copy(order),False)
+        res=np_2_tdd(split_U[k],copy.copy(order),False,add_neg)
         the_successors.append(res)
     tdd = normalize(x,the_successors)
     
     if key_width:
         tdd.key_width=the_width
-
+    if add_neg and neg:
+        tdd.neg = True
+        if tdd.weight==0:
+            tdd.weight=1
     return tdd
     
     

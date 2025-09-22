@@ -1,5 +1,5 @@
 import numpy as np
-from TDD.TDD import TDD, Ini_TDD,Clear_TDD,set_index_order,get_unique_table_num,set_root_of_unit,get_count,cont,renormalize,Slicing2,Slicing
+from TDD.TDD import TDD, Ini_TDD,Clear_TDD,set_index_order,get_unique_table_num,set_root_of_unit,get_count,cont,renormalize,Slicing2,Slicing,renormalize_wio_op
 from TDD.TDD_Q import cir_2_tn,get_real_qubit_num,add_trace_line,add_inputs,add_outputs,gen_cir
 from TDD.TN import Index,Tensor,TensorNetwork
 from TDD.Syn import *
@@ -28,14 +28,22 @@ def oracle_syn2(tdd,n=0,cond={},data_q = -1,qa_used=False,n_r=0):
     if tdd.node.key==-1:
         if abs(tdd.weight)<1e-10:
             cir = Circuit(n_r+2,[])
-            return cir
+            data_q=n_r+1
         else:
             if qa_used:
                 cir.data.append(Gate('x',{qa:1},data_q))
             else:
                 cir.data.append(Gate('x',{},data_q))
-        return cir
+
         
+    if tdd.neg:
+        if qa_used:
+            cir.data.append(Gate('x',{qa:1},data_q))
+        else:
+            cir.data.append(Gate('x',{},data_q))
+
+    if tdd.node.key==-1:
+        return cir
     u = tdd.node
 
     if u.successor[0]!=u.successor[1]:
@@ -59,8 +67,7 @@ def oracle_syn2(tdd,n=0,cond={},data_q = -1,qa_used=False,n_r=0):
         reverse_q = []
         the_map = u.out_maps[1]
         while the_map.level>-1:
-            idx = the_map.level
-            q = int(tdd.key_2_index[idx][1:])
+            q = the_map.level
             reverse_q.append(q)
             the_map=the_map.father
             
@@ -83,26 +90,45 @@ def oracle_syn2(tdd,n=0,cond={},data_q = -1,qa_used=False,n_r=0):
         the_map = u.out_maps[1]
         while the_map.level>-1:
             q1 = u.key
-            idx = the_map.level
-            q = int(tdd.key_2_index[idx][1:])
+            q = the_map.level
             g=Gate('x',{q1:1},q)
             g.is_edge_op = True
             op_gates.append(g)
             the_map=the_map.father
         cir.data+=op_gates
-        bran_tdd = get_branch_dd(u,0)
+        bran_tdd = get_branch_dd(u,0,False)
         cir_end_t0 = oracle_syn2(bran_tdd,n,cond,data_q,qa_used)
-        if abs(u.out_weight[1])<1e-10:
-            cir_end_t0 = get_controlled_circuit2(cir_end_t0,{u.key:0},1,True)
-        cir.data=cir.data+cir_end_t0.data
+        # print(cir_end_t0,'a')
+        if abs(u.out_weight[0])>1e-10:
+            if u.out_negs[0]:
+                if qa_used:
+                    if abs(u.out_weight[1])>1e-10:
+                        cir_end_t0.data=[Gate('x',{qa:1,u.key:0},data_q)]+cir_end_t0.data
+                    else:
+                        cir_end_t0.data=[Gate('x',{qa:1},data_q)]+cir_end_t0.data
+                else:
+                    if abs(u.out_weight[1])>1e-10:
+                        cir_end_t0.data=[Gate('x',{u.key:0},data_q)]+cir_end_t0.data
+                    else:
+                        cir_end_t0.data=[Gate('x',{},data_q)]+cir_end_t0.data
+            if u.out_negs[1]:
+                if qa_used:
+                    cir_end_t0.data=[Gate('x',{qa:1,u.key:1},data_q)]+cir_end_t0.data
+                else:
+                    cir_end_t0.data=[Gate('x',{u.key:1},data_q)]+cir_end_t0.data
+                    
+            if abs(u.out_weight[1])<1e-10:
+                cir_end_t0 = get_controlled_circuit2(cir_end_t0,{u.key:0},1,True)
+            cir.data=cir.data+cir_end_t0.data
+
+            
         op_gates.reverse()
         cir.data+=op_gates
             
     reverse_q = []
     the_map=tdd.map
     while the_map.level>-1:
-        idx=the_map.level
-        q = int(tdd.key_2_index[idx][1:])
+        q = the_map.level
         reverse_q.append(q)
         the_map=the_map.father 
     for g in cir.data:
@@ -111,8 +137,9 @@ def oracle_syn2(tdd,n=0,cond={},data_q = -1,qa_used=False,n_r=0):
                 g.q_c[k] = 1-g.q_c[k]
     return cir
 
+
 def verify_success(cir,data,n):
-    print(data)
+    #print(data)
     for k in range(2**n):
         input = format(k & ((1 << n) - 1), f'0{n}b')
         current_state = {n-1-q : int(input[q]) for q in range(n)}
@@ -133,18 +160,20 @@ def verify_success(cir,data,n):
         for q in range(len(current_state)-1):
             if current_state[q]!=current_state_s[q]:
                 print('Not Successful, see input:',input)
-                break                
+                return False               
         if current_state[n+1]!=data[k]:
             print('Not Successful, see input:',input)
+            return False
         # print('--')
-    print('Successful')
+    #print('Successful')
+    return True
 
-t_cost = [0, 0, 7, 16, 24, 62, 80, 200]
+t_cost_list =[0,0,7,16,24,62,80,200,216,272,392,448,504,560,616,672,728]
 
 def calc_tcost(circ):
     cost = 0
     for gate in circ.data:
-        cost += t_cost[len(list(gate.q_c.keys()))]
+        cost += t_cost_list[len(list(gate.q_c.keys()))]
     return cost
 
 def all_var_orders(num_input):
@@ -175,8 +204,11 @@ def main():
 
         tcost = 100000
         for order in all_orders:
-            tdd,data = get_TDD_from_truth_table(input_num, tt, order)
+            tdd,data = get_TDD_from_truth_table(input_num, tt, order,add_neg=True)
             circ = oracle_syn2(tdd,n_r=input_num)
+            if not verify_success(circ,data,input_num):
+               print(order)
+               return
             tcost = min(tcost, calc_tcost(circ))
             #print(f"    T cost                    = {tcost}")
             if tcost < tcost_exor: break
